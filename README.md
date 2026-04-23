@@ -4,3 +4,8 @@ This repository contains the full analysis code used in our study on neuroendocr
 **Single-cell and spatial transcriptomics reveal heterogeneity and a putative carcinogenesis trajectory in neuroendocrine cervical carcinoma**
 
 The single-cell atlas of NECC: https://atlas.qian-lab.org/necc
+
+## License
+
+MIT License
+If you use this codebase, please cite our paper (coming soon✌️).
