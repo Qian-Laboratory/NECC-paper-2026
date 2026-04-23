@@ -7,7 +7,7 @@ The single-cell atlas of NECC: https://atlas.qian-lab.org/necc
 
 ## Citation
 
-If you use this codebase, please cite our paper (coming soon✌️).
+Our paper is coming soon✌️.
 
 ## Contact
 
