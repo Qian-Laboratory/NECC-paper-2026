@@ -1,0 +1,130 @@
+#start
+conda activate cv
+
+export PATH=$PATH:/share/apps/software
+data_path=/share/home/qlab/project_10x/3_data/project_cc/
+output_path=/share/home/qjb/projects/project_cc/VT
+threads=48
+batch=CCmix2
+sample=sc5r${batch}gexhash
+date 
+
+
+./subset-bam --bam $data_path/$sample/outs/possorted_genome_bam.bam \
+	--cell-barcodes $output_path/white_list/bam_${batch}_whitelist.tsv \
+	--cores $threads \
+	 --out-bam $output_path/bam_extract/${sample}_possorted_genome_bam.ba
+
+
+#take unmapped reads
+samtools view -b -f 4 -@ $threads \
+  $output_path/bam_extract/${sample}_possorted_genome_bam.bam \
+  $output_path/bam_extract/${sample}_unmapped.bam
+date
+#convert bam file to 10X style fastq
+bamtofastq $output_path/bam_extract/${sample}_unmapped.bam $output_path/bam_extract/$sample
+
+folder=gemgroup001 
+
+umi_tools extract --bc-pattern=CCCCCCCCCCCCCCCCNNNNNNNNNN \
+                  --stdin=$output_path/bam_extract/$sample/$folder/bamtofastq_S1_L000_R1_001.fastq.gz  \
+                  --stdout=$output_path/umi_extract/${sample}_R1_extracted.fastq.gz  \
+                  --read2-in=$output_path/bam_extract/$sample/$folder/bamtofastq_S1_L000_R2_001.fastq.gz  \
+                  --read2-out=$output_path/umi_extract/${sample}_R2_extracted.fastq.gz \
+                  --whitelist=$output_path/white_list/${sample}_whitelist.tsv 
+
+# sample C141-144, and C146, C148, C149 and C152 have /2 in the fastq header and need to remove
+
+sample=C142
+gunzip $output_path/umi_extract/${sample}_R2_extracted.fastq.gz
+sed -i.bak -e 's/\/2\_/\_/' $output_path/umi_extract/${sample}_R2_extracted.fastq
+gzip $output_path/umi_extract/${sample}_R2_extracted.fastq
+
+
+conda activate vt
+export PATH=$PATH:/share/apps/software
+data_path=/share/home/qlab/project_10x/3_data/project_cc/
+output_path=/share/home/qjb/projects/project_cc/VT
+threads=48
+batch=CCmix4
+sample=sc5r${batch}gexhash
+
+#take unmapped reads
+samtools view -b -f 4 -@ $threads \
+  $data_path/$sample/outs/possorted_genome_bam.bam \
+  > $output_path/bam_extract/${sample}_unmapped.bam
+
+samtools index -b -@ $threads $output_path/bam_extract/${sample}_unmapped.bam
+
+subset-bam --bam $output_path/bam_extract/${sample}_unmapped.bam \
+  --cell-barcodes $output_path/white_list/bam_${batch}_whitelist.tsv \
+  --cores $threads \
+  --out-bam $output_path/bam_extract/${sample}_unmapped_subset.bam
+
+
+bamtofastq --nthreads $threads $output_path/bam_extract/${sample}_unmapped_subset.bam $output_path/bam_extract/$sample --reads-per-fastq=99999999999999999
+
+
+file=1
+for lane in 0 1
+do
+cat $output_path/bam_extract/$sample/${sample}_${lane}_*/bamtofastq_S1_L000_R1_00${file}.fastq.gz \
+    > $output_path/bam_extract/$sample/${sample}_S1_L00${lane}_R1_00${file}.fastq.gz
+cat $output_path/bam_extract/$sample/${sample}_${lane}_*/bamtofastq_S1_L000_R2_00${file}.fastq.gz \
+    > $output_path/bam_extract/$sample/${sample}_S1_L00${lane}_R2_00${file}.fastq.gz
+done
+
+cat $output_path/bam_extract/$sample/${sample}_S1_L00*_R1_00*.fastq.gz \
+    > $output_path/bam_extract/$sample/${sample}_S1_L01_R1_001.fastq.gz
+
+cat $output_path/bam_extract/$sample/${sample}_S1_L00*_R2_00*.fastq.gz \
+    > $output_path/bam_extract/$sample/${sample}_S1_L01_R2_001.fastq.gz
+
+rm -rf $output_path/bam_extract/$sample/${sample}_0_*
+rm -rf $output_path/bam_extract/$sample/${sample}_1_*
+
+umi_tools whitelist --stdin $output_path/bam_extract/$sample/${sample}_S1_L01_R1_001.fastq.gz \
+                    --bc-pattern=CCCCCCCCCCCCCCCCNNNNNNNNNN \
+                    --set-cell-number=40000 \
+                    --log2stderr > whitelist.txt
+
+umi_tools extract --bc-pattern=CCCCCCCCCCCCCCCCNNNNNNNNNN \
+                  --stdin=$output_path/bam_extract/$sample/${sample}_S1_L000_R1_001.fastq.gz  \
+                  --stdout=$output_path/umi_extract/${sample}_R1_extracted.fastq.gz  \
+                  --read2-in=$output_path/bam_extract/$sample/$folder/${sample}_S1_L000_R2_001.fastq.gz  \
+                  --read2-out=$output_path/umi_extract/${sample}_R2_extracted.fastq.gz \
+                  --whitelist=$output_path/white_list/${batch}_whitelist.tsv 
+
+umi_tools extract --bc-pattern=CCCCCCCCCCCCCCCCNNNNNNNNNN \
+                  --stdin=$output_path/bam_extract/$sample/${sample}_S1_L01_R1_001.fastq.gz  \
+                  --stdout=$output_path/umi_extract/${sample}_R1_extracted.fastq.gz  \
+                  --read2-in=$output_path/bam_extract/$sample/$folder/${sample}_S1_L01_R2_001.fastq.gz  \
+                  --read2-out=$output_path/umi_extract/${sample}_R2_extracted.fastq.gz \
+                  --whitelist=$output_path/whitelist.txt
+
+
+# make virus
+mkdir virus_index
+STAR --runThreadN 10 --genomeDir ./virus_index/hpv16 --runMode genomeGenerate --genomeFastaFiles ./reference/NC_001526.4.fasta
+STAR --runThreadN 40 --genomeDir ./virus_index/virusite --runMode genomeGenerate --genomeFastaFiles ./reference/virusite_202202/genomes.fasta
+
+# Prepare Files_to_process and Parameter before running
+# Prepare GTF file for HPV
+
+Rscript Viral_Track_scanning.R ./data/Parameter_unmapped_CC_virusite.txt ./data/Files_to_process_CC_HPV16_single.txt
+Rscript Viral_Track_scanning.R ./data/Parameter_unmapped_CC_virusite.txt ./data/Files_to_process_CC_HPV16_mix.txt
+Rscript Viral_Track_transcript_assembly.R ./data/Parameter_unmapped_CC_virusite.txt ./data/Files_to_process_CC_HPV16_all.txt
+Rscript Viral_Track_cell_demultiplexing.R ./data/Parameter_unmapped_CC_virusite.txt ./data/Files_to_process_CC_HPV16_all.txt
+
+
+Rscript Viral_Track_transcript_assembly.R ./data/Parameter_unmapped_CC_virusite.txt ./data/Files_to_process_CC_HPV16.txt
+Rscript Viral_Track_transcript_assembly.R ./data/Parameter_unmapped_CC_HPV16.txt ./data/Files_to_process_CC_HPV16.txt
+
+Rscript Viral_Track_scanning_25.R ./data/Parameter_unmapped_CC_virusite.txt ./data/Files_to_process_CC_HPV16.txt
+Rscript Viral_Track_scanning_25.R ./data/Parameter_unmapped_CC_HPV16.txt ./data/Files_to_process_CC_HPV16.txt
+Rscript Viral_Track_cell_demultiplexing.R  ./data/Parameter_unmapped_CC_virusite.txt ./data/Files_to_process_CC_HPV16.txt
+
+Rscript Viral_Track_cell_demultiplexing.R  ./data/Parameter_unmapped_CC_HPV16.txt ./data/Files_to_process_CC_HPV16.txt
+
+# new 25
+Rscript Viral_Track_scanning_25.R ./data/Parameter_unmapped_CC_HPV16_25.txt ./data/Files_to_process_CC_HPV16_all.txt
