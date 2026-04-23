@@ -5,7 +5,6 @@ This repository contains the full analysis code used in our study on neuroendocr
 
 The single-cell atlas of NECC: https://atlas.qian-lab.org/necc
 
-## License
+## Citation
 
-MIT License
 If you use this codebase, please cite our paper (coming soon✌️).
